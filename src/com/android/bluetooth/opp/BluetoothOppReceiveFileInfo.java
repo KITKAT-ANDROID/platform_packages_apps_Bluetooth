@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2008-2009, Motorola, Inc.
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ *
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -99,7 +100,7 @@ public class BluetoothOppReceiveFileInfo {
             try {
                 if (metadataCursor.moveToFirst()) {
                     hint = metadataCursor.getString(0);
-                    length = metadataCursor.getLong(1);
+                    length = metadataCursor.getInt(1);
                     mimeType = metadataCursor.getString(2);
                 }
             } finally {

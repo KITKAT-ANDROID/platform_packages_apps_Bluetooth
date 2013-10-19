@@ -1,6 +1,4 @@
-/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
- * Not a Contribution.
- *
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,8 +64,6 @@ import com.android.internal.util.StateMachine;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import android.os.SystemProperties;
-
 
 final class HeadsetStateMachine extends StateMachine {
     private static final String TAG = "HeadsetStateMachine";
@@ -77,14 +73,6 @@ final class HeadsetStateMachine extends StateMachine {
 
     private static final String HEADSET_NAME = "bt_headset_name";
     private static final String HEADSET_NREC = "bt_headset_nrec";
-    private static final String HEADSET_SAMPLERATE = "bt_samplerate";
-
-    private static final int VERSION_1_5 = 105;
-    private static final int VERSION_1_6 = 106;
-    private static final String PROP_VERSION_KEY = "ro.bluetooth.hfp.ver";
-    private static final String PROP_VERSION_1_6 = "1.6";
-
-    private static final int mVersion;
 
     static final int CONNECT = 1;
     static final int DISCONNECT = 2;
@@ -114,34 +102,6 @@ final class HeadsetStateMachine extends StateMachine {
 
     private static final int DIALING_OUT_TIMEOUT_VALUE = 10000;
     private static final int START_VR_TIMEOUT_VALUE = 5000;
-
-    /* Constants from Bluetooth Specification Hands-Free profile version 1.6 */
-    private static final int BRSF_AG_THREE_WAY_CALLING = 1 << 0;
-    private static final int BRSF_AG_EC_NR = 1 << 1;
-    private static final int BRSF_AG_VOICE_RECOG = 1 << 2;
-    private static final int BRSF_AG_IN_BAND_RING = 1 << 3;
-    private static final int BRSF_AG_VOICE_TAG_NUMBE = 1 << 4;
-    private static final int BRSF_AG_REJECT_CALL = 1 << 5;
-    private static final int BRSF_AG_ENHANCED_CALL_STATUS = 1 <<  6;
-    private static final int BRSF_AG_ENHANCED_CALL_CONTROL = 1 << 7;
-    private static final int BRSF_AG_ENHANCED_ERR_RESULT_CODES = 1 << 8;
-    private static final int BRSF_AG_CODEC_NEGOTIATION = 1 << 9;
-
-    private static final int BRSF_HF_EC_NR = 1 << 0;
-    private static final int BRSF_HF_CW_THREE_WAY_CALLING = 1 << 1;
-    private static final int BRSF_HF_CLIP = 1 << 2;
-    private static final int BRSF_HF_VOICE_REG_ACT = 1 << 3;
-    private static final int BRSF_HF_REMOTE_VOL_CONTROL = 1 << 4;
-    private static final int BRSF_HF_ENHANCED_CALL_STATUS = 1 <<  5;
-    private static final int BRSF_HF_ENHANCED_CALL_CONTROL = 1 << 6;
-    private static final int BRSF_HF_CODEC_NEGOTIATION = 1 << 7;
-
-    private static final int CODEC_NONE = 0;
-    private static final int CODEC_CVSD = 1;
-    private static final int CODEC_MSBC = 2;
-
-    private int mLocalBrsf = 0;
-    private int mCodec = CODEC_NONE;
 
     private static final ParcelUuid[] HEADSET_UUIDS = {
         BluetoothUuid.HSP,
@@ -202,16 +162,6 @@ final class HeadsetStateMachine extends StateMachine {
         classInitNative();
     }
 
-    static {
-        if (PROP_VERSION_1_6.equals(SystemProperties.get(PROP_VERSION_KEY))) {
-            mVersion = VERSION_1_6;
-            Log.d(TAG, "Version 1.6");
-        } else {
-            mVersion = VERSION_1_5;
-            Log.d(TAG, "Version 1.5");
-        }
-    }
-
     private HeadsetStateMachine(HeadsetService context) {
         super(TAG);
         mService = context;
@@ -237,11 +187,6 @@ final class HeadsetStateMachine extends StateMachine {
         initializeNative();
         mNativeAvailable=true;
 
-        mLocalBrsf = BRSF_AG_THREE_WAY_CALLING |
-                     BRSF_AG_EC_NR |
-                     BRSF_AG_REJECT_CALL |
-                     BRSF_AG_ENHANCED_CALL_STATUS;
-
         mDisconnected = new Disconnected();
         mPending = new Pending();
         mConnected = new Connected();
@@ -251,25 +196,13 @@ final class HeadsetStateMachine extends StateMachine {
             sVoiceCommandIntent = new Intent(Intent.ACTION_VOICE_COMMAND);
             sVoiceCommandIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         }
-        if (context.getPackageManager().resolveActivity(sVoiceCommandIntent,0) != null
-            && BluetoothHeadset.isBluetoothVoiceDialingEnabled(context)) {
-            mLocalBrsf |= BRSF_AG_VOICE_RECOG;
-        }
 
-        if (mVersion == VERSION_1_6) {
-            if (DBG) Log.d(TAG, "BRSF_AG_CODEC_NEGOTIATION is enabled!");
-            mLocalBrsf |= BRSF_AG_CODEC_NEGOTIATION;
-        } else {
-            if (DBG) Log.d(TAG, "BRSF_AG_CODEC_NEGOTIATION is disabled");
-        }
-        initializeFeaturesNative(mLocalBrsf);
         addState(mDisconnected);
         addState(mPending);
         addState(mConnected);
         addState(mAudioOn);
 
         setInitialState(mDisconnected);
-        mPhoneState.listenForPhoneState(true);
     }
 
     static HeadsetStateMachine make(HeadsetService context) {
@@ -846,7 +779,6 @@ final class HeadsetStateMachine extends StateMachine {
                 case HeadsetHalConstants.AUDIO_STATE_CONNECTED:
                     // TODO(BT) should I save the state for next broadcast as the prevState?
                     mAudioState = BluetoothHeadset.STATE_AUDIO_CONNECTED;
-                    setAudioSamplerate(); /*Set proper sample rate.*/
                     mAudioManager.setBluetoothScoOn(true);
                     broadcastAudioState(device, BluetoothHeadset.STATE_AUDIO_CONNECTED,
                                         BluetoothHeadset.STATE_AUDIO_CONNECTING);
@@ -873,7 +805,6 @@ final class HeadsetStateMachine extends StateMachine {
                     // Additionally, no indicator updates should be sent prior to SLC setup
                     mPhoneState.listenForPhoneState(true);
                     mPhoneProxy.queryPhoneState();
-                    mCodec = CODEC_NONE;
                 } catch (RemoteException e) {
                     Log.e(TAG, Log.getStackTraceString(new Throwable()));
                 }
@@ -1093,14 +1024,6 @@ final class HeadsetStateMachine extends StateMachine {
         public void onServiceConnected(ComponentName className, IBinder service) {
             if (DBG) Log.d(TAG, "Proxy object connected");
             mPhoneProxy = IBluetoothHeadsetPhone.Stub.asInterface(service);
-            if (mPhoneProxy != null) {
-                try {
-                    log("Try to query the phonestate on bind");
-                    mPhoneProxy.queryPhoneState();
-                } catch (RemoteException e) {
-                    Log.e(TAG, Log.getStackTraceString(new Throwable()));
-                }
-            } else Log.e(TAG, " phone proxy null for query phone state");
         }
 
         public void onServiceDisconnected(ComponentName className) {
@@ -1374,17 +1297,6 @@ final class HeadsetStateMachine extends StateMachine {
         // Reset NREC on connect event. Headset will override later
         mAudioManager.setParameters(HEADSET_NAME + "=" + getCurrentDeviceName() + ";" +
                                     HEADSET_NREC + "=on");
-    }
-
-    private void setAudioSamplerate()
-    {
-        if (mCodec != CODEC_MSBC) {
-            Log.d(TAG, "Set sample rate: 8000");
-            mAudioManager.setParameters(HEADSET_SAMPLERATE + "=8000");
-        } else {
-            Log.d(TAG, "Set sample rate: 16000");
-            mAudioManager.setParameters(HEADSET_SAMPLERATE + "=16000");
-        }
     }
 
     private String parseUnknownAt(String atString)
@@ -1968,11 +1880,6 @@ final class HeadsetStateMachine extends StateMachine {
         sendMessage(STACK_EVENT, event);
     }
 
-    private void onCodecNegotiated(int codec_type){
-        Log.d(TAG, "onCodecNegotiated: The value is: " + codec_type);
-        mCodec = codec_type;
-    }
-
     private void processIntentBatteryChanged(Intent intent) {
         int batteryLevel = intent.getIntExtra("level", -1);
         int scale = intent.getIntExtra("scale", -1);
@@ -2132,7 +2039,6 @@ final class HeadsetStateMachine extends StateMachine {
 
     private native static void classInitNative();
     private native void initializeNative();
-    private native void initializeFeaturesNative(int feature_bitmask);
     private native void cleanupNative();
     private native boolean connectHfpNative(byte[] address);
     private native boolean disconnectHfpNative(byte[] address);

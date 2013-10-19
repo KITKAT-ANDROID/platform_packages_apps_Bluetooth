@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
  * Copyright (c) 2008-2009, Motorola, Inc.
  *
  * All rights reserved.
@@ -47,18 +46,8 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
-import android.os.Process;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
-
-import android.os.SystemProperties;
-import android.database.Cursor;
-import android.provider.ContactsContract.Contacts;
-import android.provider.ContactsContract.Profile;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.lang.Thread;
-
 
 import javax.obex.HeaderSet;
 import javax.obex.ObexTransport;
@@ -166,46 +155,6 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         }
         mCallback = null;
         mSession = null;
-    }
-
-    private class ContentResolverUpdateThread extends Thread {
-
-        private static final int sSleepTime = 500;
-        private Uri contentUri;
-        private Context mContext1;
-        private long position;
-
-        public ContentResolverUpdateThread(Context context, Uri cntUri, long pos) {
-            super("BtOpp Server ContentResolverUpdateThread");
-            mContext1 = context;
-            contentUri = cntUri;
-            position = pos;
-        }
-
-        public void updateProgress (long pos) {
-            position = pos;
-        }
-
-        @Override
-        public void run() {
-            ContentValues updateValues;
-
-            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-
-            while (true) {
-                updateValues = new ContentValues();
-                updateValues.put(BluetoothShare.CURRENT_BYTES, position);
-                mContext1.getContentResolver().update(contentUri, updateValues,
-                        null, null);
-
-                try {
-                    Thread.sleep(sSleepTime);
-                } catch (InterruptedException e1) {
-                    if (V) Log.v(TAG, "Server ContentResolverUpdateThread was interrupted (1), exiting");
-                    return;
-                }
-            }
-        }
     }
 
     public void addShare(BluetoothOppShareInfo info) {
@@ -317,7 +266,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         ContentValues values = new ContentValues();
 
         values.put(BluetoothShare.FILENAME_HINT, name);
-        values.put(BluetoothShare.TOTAL_BYTES, length);
+        values.put(BluetoothShare.TOTAL_BYTES, length.intValue());
         values.put(BluetoothShare.MIMETYPE, mimeType);
 
         values.put(BluetoothShare.DESTINATION, destination);
@@ -482,7 +431,6 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
          */
         int status = -1;
         BufferedOutputStream bos = null;
-        ContentResolverUpdateThread uiUpdateThread = null;
 
         InputStream is = null;
         boolean error = false;
@@ -502,7 +450,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
             mContext.getContentResolver().update(contentUri, updateValues, null, null);
         }
 
-        long position = 0;
+        int position = 0;
         if (!error) {
             bos = new BufferedOutputStream(fileInfo.mOutputStream, 0x10000);
         }
@@ -533,54 +481,19 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
                                 + (System.currentTimeMillis() - timestamp) + " ms");
                     }
 
-                    if (uiUpdateThread == null) {
-                        uiUpdateThread = new ContentResolverUpdateThread (mContext, contentUri, position);
-                        if (V) {
-                            Log.v(TAG, "Worker for Updation : Created");
-                        }
-                        uiUpdateThread.start();
-                    } else {
-                        uiUpdateThread.updateProgress (position);
-                    }
-                }
-
-                if (uiUpdateThread != null) {
-                    try {
-                        if (V) {
-                            Log.v(TAG, "Worker for Updation : Destroying");
-                        }
-                        uiUpdateThread.interrupt ();
-                        uiUpdateThread.join ();
-                        uiUpdateThread = null;
-
-                        ContentValues updateValues = new ContentValues();
-                        updateValues.put(BluetoothShare.CURRENT_BYTES, position);
-                        mContext.getContentResolver().update(contentUri, updateValues,
-                                        null, null);
-                    } catch (InterruptedException ie) {
-                            if (V) Log.v(TAG, "Interrupted waiting for uiUpdateThread to join");
-                    }
+                    ContentValues updateValues = new ContentValues();
+                    updateValues.put(BluetoothShare.CURRENT_BYTES, position);
+                    mContext.getContentResolver().update(contentUri, updateValues, null, null);
                 }
             } catch (IOException e1) {
-                Log.e(TAG, "Error when receiving file: " + e1);
+                Log.e(TAG, "Error when receiving file");
                 /* OBEX Abort packet received from remote device */
                 if ("Abort Received".equals(e1.getMessage())) {
                     status = BluetoothShare.STATUS_CANCELED;
                 } else {
                     status = BluetoothShare.STATUS_OBEX_DATA_ERROR;
                 }
-                if (mFileInfo.mFileName != null) {
-                    new File(mFileInfo.mFileName).delete();
-                }
                 error = true;
-            } finally {
-                if (uiUpdateThread != null) {
-                    if (V) {
-                        Log.v(TAG, "Worker for Updation : Finally Destroying");
-                    }
-                    uiUpdateThread.interrupt ();
-                    uiUpdateThread = null;
-                }
             }
         }
 
