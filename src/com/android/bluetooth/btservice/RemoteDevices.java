@@ -228,7 +228,7 @@ final class RemoteDevices {
         intent.putExtra(BluetoothDevice.EXTRA_PAIRING_KEY, pin);
         intent.putExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT,
                     BluetoothDevice.PAIRING_VARIANT_DISPLAY_PIN);
-        mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
+        mAdapterService.sendOrderedBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
     }
 
     void devicePropertyChangedCallback(byte[] address, int[] types, byte[][] values) {
@@ -324,7 +324,7 @@ final class RemoteDevices {
         mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_PERM);
     }
 
-    void pinRequestCallback(byte[] address, byte[] name, int cod, boolean secure) {
+    void pinRequestCallback(byte[] address, byte[] name, int cod) {
         //TODO(BT): Get wakelock and update name and cod
         BluetoothDevice bdDevice = getDevice(address);
         if (bdDevice == null) {
@@ -349,13 +349,12 @@ final class RemoteDevices {
             return;
         }
         infoLog("pinRequestCallback: " + address + " name:" + name + " cod:" +
-                cod + "secure" + secure );
+                cod);
         Intent intent = new Intent(BluetoothDevice.ACTION_PAIRING_REQUEST);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, getDevice(address));
         intent.putExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT,
                 BluetoothDevice.PAIRING_VARIANT_PIN);
-        intent.putExtra(BluetoothDevice.EXTRA_SECURE_PAIRING, secure);
-        mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
+        mAdapterService.sendOrderedBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
         return;
     }
 
@@ -380,7 +379,7 @@ final class RemoteDevices {
             variant = BluetoothDevice.PAIRING_VARIANT_PASSKEY;
         } else if (pairingVariant == AbstractionLayer.BT_SSP_VARIANT_PASSKEY_NOTIFICATION) {
             variant = BluetoothDevice.PAIRING_VARIANT_DISPLAY_PASSKEY;
-	    displayPasskey = true;
+            displayPasskey = true;
         } else {
             errorLog("SSP Pairing variant not present");
             return;
@@ -397,7 +396,7 @@ final class RemoteDevices {
             intent.putExtra(BluetoothDevice.EXTRA_PAIRING_KEY, passkey);
         }
         intent.putExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, variant);
-        mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
+        mAdapterService.sendOrderedBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
     }
 
     void aclStateChangeCallback(int status, byte[] address, int newState) {
