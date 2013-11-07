@@ -21,6 +21,7 @@
 #include "utils/misc.h"
 #include "cutils/properties.h"
 #include "android_runtime/AndroidRuntime.h"
+#include "android_runtime/Log.h"
 
 #include <string.h>
 #include <pthread.h>
@@ -344,7 +345,7 @@ static void discovery_state_changed_callback(bt_discovery_state_t state) {
     checkAndClearExceptionFromCallback(callbackEnv, __FUNCTION__);
 }
 
-static void pin_request_callback(bt_bdaddr_t *bd_addr, bt_bdname_t *bdname, uint32_t cod, uint8_t secure) {
+static void pin_request_callback(bt_bdaddr_t *bd_addr, bt_bdname_t *bdname, uint32_t cod) {
     jbyteArray addr, devname;
     if (!checkCallbackThread()) {
        ALOGE("Callback: '%s' is not called on the correct thread", __FUNCTION__);
@@ -364,7 +365,7 @@ static void pin_request_callback(bt_bdaddr_t *bd_addr, bt_bdname_t *bdname, uint
 
     callbackEnv->SetByteArrayRegion(devname, 0, sizeof(bt_bdname_t), (jbyte*)bdname);
 
-    callbackEnv->CallVoidMethod(sJniCallbacksObj, method_pinRequestCallback, addr, devname, cod, secure);
+    callbackEnv->CallVoidMethod(sJniCallbacksObj, method_pinRequestCallback, addr, devname, cod);
 
     checkAndClearExceptionFromCallback(callbackEnv, __FUNCTION__);
     callbackEnv->DeleteLocalRef(addr);
@@ -477,7 +478,7 @@ static void classInitNative(JNIEnv* env, jclass clazz) {
                                                             "([B[I[[B)V");
     method_deviceFoundCallback = env->GetMethodID(jniCallbackClass, "deviceFoundCallback", "([B)V");
     method_pinRequestCallback = env->GetMethodID(jniCallbackClass, "pinRequestCallback",
-                                                 "([B[BIZ)V");
+                                                 "([B[BI)V");
     method_sspRequestCallback = env->GetMethodID(jniCallbackClass, "sspRequestCallback",
                                                  "([B[BIII)V");
 
@@ -904,6 +905,20 @@ Fail:
     return -1;
 }
 
+static jboolean configHciSnoopLogNative(JNIEnv* env, jobject obj, jboolean enable) {
+    ALOGV("%s:",__FUNCTION__);
+
+    jboolean result = JNI_FALSE;
+
+    if (!sBluetoothInterface) return result;
+
+    int ret = sBluetoothInterface->config_hci_snoop_log(enable);
+
+    result = (ret == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
+
+    return result;
+}
+
 static JNINativeMethod sMethods[] = {
     /* name, signature, funcPtr */
     {"classInitNative", "()V", (void *) classInitNative},
@@ -926,7 +941,8 @@ static JNINativeMethod sMethods[] = {
     {"getRemoteServicesNative", "([B)Z", (void*) getRemoteServicesNative},
     {"connectSocketNative", "([BI[BII)I", (void*) connectSocketNative},
     {"createSocketChannelNative", "(ILjava/lang/String;[BII)I",
-     (void*) createSocketChannelNative}
+     (void*) createSocketChannelNative},
+    {"configHciSnoopLogNative", "(Z)Z", (void*) configHciSnoopLogNative}
 };
 
 int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env)
